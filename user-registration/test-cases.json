@@ -1,0 +1,9 @@
+{
+  "test_cases": [
+    {
+      "name": "Complete Registration Test",
+      "description": "Fill all fields and submit the form",
+      "natural_language": "My name is John Doe, I am 30 years old, male, I live at 123 Main Street, Bangalore, pincode 560001, submit the form"
+    }
+  ]
+}
