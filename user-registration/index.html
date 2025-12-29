@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Registration</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-primary: #0f1419;
+        --bg-secondary: #1a1f26;
+        --bg-card: #232a33;
+        --accent: #00d4aa;
+        --accent-glow: rgba(0, 212, 170, 0.3);
+        --text-primary: #e8eaed;
+        --text-secondary: #8b949e;
+        --border: #30363d;
+        --success-bg: #0d4a3a;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Outfit", sans-serif;
+        background: var(--bg-primary);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        background-image: radial-gradient(
+            ellipse at 20% 30%,
+            rgba(0, 212, 170, 0.08) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at 80% 70%,
+            rgba(0, 150, 136, 0.06) 0%,
+            transparent 50%
+          );
+      }
+
+      .container {
+        width: 100%;
+        max-width: 480px;
+        animation: slideUp 0.6s ease-out;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2.5rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 2rem;
+      }
+
+      .header h1 {
+        color: var(--text-primary);
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+
+      .header p {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        font-weight: 300;
+      }
+
+      .form-group {
+        margin-bottom: 1.25rem;
+      }
+
+      label {
+        display: block;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 0.875rem 1rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-family: "Outfit", sans-serif;
+        font-size: 1rem;
+        transition: all 0.2s ease;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-glow);
+      }
+
+      input::placeholder,
+      textarea::placeholder {
+        color: var(--text-secondary);
+        opacity: 0.6;
+      }
+
+      select {
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b949e' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem center;
+      }
+
+      select option {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+
+      .submit-btn {
+        width: 100%;
+        padding: 1rem;
+        margin-top: 1rem;
+        background: var(--accent);
+        color: var(--bg-primary);
+        border: none;
+        border-radius: 8px;
+        font-family: "Outfit", sans-serif;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px var(--accent-glow);
+      }
+
+      .submit-btn:active {
+        transform: translateY(0);
+      }
+
+      /* Success Message */
+      .success-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 20, 25, 0.9);
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        animation: fadeIn 0.3s ease;
+      }
+
+      .success-overlay.show {
+        display: flex;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .success-card {
+        background: var(--bg-card);
+        border: 1px solid var(--accent);
+        border-radius: 16px;
+        padding: 3rem;
+        text-align: center;
+        animation: popIn 0.4s ease;
+        box-shadow: 0 0 60px var(--accent-glow);
+      }
+
+      @keyframes popIn {
+        from {
+          opacity: 0;
+          transform: scale(0.8);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      .success-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--success-bg);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+      }
+
+      .success-icon svg {
+        width: 40px;
+        height: 40px;
+        stroke: var(--accent);
+        stroke-width: 3;
+        fill: none;
+        stroke-dasharray: 100;
+        stroke-dashoffset: 100;
+        animation: drawCheck 0.5s ease 0.2s forwards;
+      }
+
+      @keyframes drawCheck {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+
+      .success-card h2 {
+        color: var(--accent);
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .success-card p {
+        color: var(--text-secondary);
+      }
+
+      .close-btn {
+        margin-top: 1.5rem;
+        padding: 0.75rem 2rem;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-family: "Outfit", sans-serif;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .close-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <div class="header">
+          <h1>User Registration</h1>
+          <p>Please fill in your details below</p>
+        </div>
+
+        <form id="userForm">
+          <div class="form-group">
+            <label for="name">Full Name</label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              placeholder="Enter your full name"
+              required
+            />
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label for="age">Age</label>
+              <input
+                type="number"
+                id="age"
+                name="age"
+                placeholder="25"
+                min="1"
+                max="120"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="sex">Sex</label>
+              <select id="sex" name="sex" required>
+                <option value="">Select</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="address">Address</label>
+            <textarea
+              id="address"
+              name="address"
+              placeholder="Enter your full address"
+              required
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="pincode">Pincode</label>
+            <input
+              type="text"
+              id="pincode"
+              name="pincode"
+              placeholder="560001"
+              pattern="[0-9]{6}"
+              maxlength="6"
+              required
+            />
+          </div>
+
+          <button type="submit" class="submit-btn">Submit</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Success Overlay -->
+    <div class="success-overlay" id="successOverlay">
+      <div class="success-card">
+        <div class="success-icon">
+          <svg viewBox="0 0 24 24">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <h2>Success!</h2>
+        <p>Your details have been submitted successfully.</p>
+        <button class="close-btn" onclick="closeSuccess()">Close</button>
+      </div>
+    </div>
+
+    <script>
+      document
+        .getElementById("userForm")
+        .addEventListener("submit", function (e) {
+          e.preventDefault();
+          document.getElementById("successOverlay").classList.add("show");
+        });
+
+      function closeSuccess() {
+        document.getElementById("successOverlay").classList.remove("show");
+        document.getElementById("userForm").reset();
+      }
+
+      // Form Tools - Function setters for FunctionGemma
+      const FormTools = {
+        setUserName(name) {
+          const field = document.getElementById("name");
+          if (field) {
+            field.value = name;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            return `Set name to: ${name}`;
+          }
+          return "Error: Name field not found";
+        },
+
+        setUserAge(age) {
+          const field = document.getElementById("age");
+          if (field) {
+            field.value = age;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            return `Set age to: ${age}`;
+          }
+          return "Error: Age field not found";
+        },
+
+        setUserSex(sex) {
+          const field = document.getElementById("sex");
+          if (field) {
+            field.value = sex.toLowerCase();
+            field.dispatchEvent(new Event("change", { bubbles: true }));
+            return `Set sex to: ${sex}`;
+          }
+          return "Error: Sex field not found";
+        },
+
+        setUserAddress(address) {
+          const field = document.getElementById("address");
+          if (field) {
+            field.value = address;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            return `Set address to: ${address}`;
+          }
+          return "Error: Address field not found";
+        },
+
+        setUserPincode(pincode) {
+          const field = document.getElementById("pincode");
+          if (field) {
+            field.value = pincode;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            return `Set pincode to: ${pincode}`;
+          }
+          return "Error: Pincode field not found";
+        },
+
+        submitForm() {
+          const form = document.getElementById("userForm");
+          if (form) {
+            form.dispatchEvent(
+              new Event("submit", { bubbles: true, cancelable: true })
+            );
+            return "Form submitted successfully";
+          }
+          return "Error: Form not found";
+        },
+
+        // Execute a function by name (for FunctionGemma)
+        execute(funcName, args) {
+          const functionMap = {
+            set_user_name: (a) => this.setUserName(a.name),
+            set_user_age: (a) => this.setUserAge(a.age),
+            set_user_sex: (a) => this.setUserSex(a.sex),
+            set_user_address: (a) => this.setUserAddress(a.address),
+            set_user_pincode: (a) => this.setUserPincode(a.pincode),
+            submit_form: () => this.submitForm(),
+          };
+          const func = functionMap[funcName];
+          return func ? func(args) : `Error: Unknown function '${funcName}'`;
+        },
+
+        // Parse FunctionGemma output format
+        parseFunctionCall(output) {
+          // Note: Use .*? instead of .+? to allow empty braces for functions with no args (like submit_form)
+          const pattern =
+            /<start_function_call>call:(\w+)\{(.*?)\}<end_function_call>/;
+          const match = output.match(pattern);
+          if (match) {
+            const funcName = match[1];
+            const argsStr = match[2];
+            const args = {};
+            // Only parse arguments if argsStr is not empty
+            if (argsStr.trim()) {
+              const argPattern = /(\w+):<escape>(.+?)<escape>/g;
+              let argMatch;
+              while ((argMatch = argPattern.exec(argsStr)) !== null) {
+                args[argMatch[1]] = argMatch[2];
+              }
+            }
+            return { name: funcName, args };
+          }
+          return null;
+        },
+
+        // Process FunctionGemma output and execute function calls
+        processOutput(output) {
+          const call = this.parseFunctionCall(output);
+          if (call) {
+            console.log(`🔧 Executing: ${call.name}`, call.args);
+            const result = this.execute(call.name, call.args);
+            console.log(`📥 Result: ${result}`);
+            return result;
+          }
+          return null;
+        },
+      };
+
+      // Expose globally for testing and future FunctionGemma integration
+      window.FormTools = FormTools;
+    </script>
+
+    <!-- FunctionGemma Integration -->
+    <script type="module">
+      // Import transformers.js for FunctionGemma
+      import {
+        pipeline,
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        env,
+      } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+
+      // Configure transformers.js environment
+      env.allowLocalModels = false; // Disable local file access, force HTTP
+      env.useBrowserCache = false;
+      env.useCustomCache = false;
+
+      // Custom fetch function to intercept model requests and redirect to local server
+      const modelServerUrl = getModelServerUrl();
+      const originalFetch = env.fetch || fetch;
+      const originalGlobalFetch = window.fetch;
+
+      // Create our custom fetch function
+      const customFetch = async (url, init) => {
+        const urlString = typeof url === "string" ? url : url.toString();
+
+        // Log all requests for debugging
+        if (
+          urlString.includes("local-functiongemma") ||
+          urlString.includes("huggingface.co")
+        ) {
+          console.log(`🔍 Intercepting request: ${urlString}`);
+        }
+
+        // Intercept file:// URLs and convert to HTTP
+        if (urlString.startsWith("file://")) {
+          // Extract path from file:// URL
+          // file:///models/local-functiongemma-270m/tokenizer.json -> /tokenizer.json
+          let filePath = "";
+          try {
+            const urlObj = new URL(urlString);
+            filePath = urlObj.pathname;
+
+            // Remove /models/local-functiongemma-270m/ prefix if present
+            if (filePath.includes("/models/local-functiongemma-270m/")) {
+              filePath = filePath.split("/models/local-functiongemma-270m/")[1];
+            } else if (filePath.includes("local-functiongemma-270m/")) {
+              filePath = filePath.split("local-functiongemma-270m/")[1];
+            } else if (filePath.includes("/models/")) {
+              // Just /models/filename.json -> /filename.json
+              filePath = filePath.split("/models/")[1];
+            }
+
+            // Ensure path starts with /
+            filePath = "/" + filePath.replace(/^\/+/, "");
+
+            const localUrl = `${modelServerUrl}${filePath}`;
+            console.log(
+              `🔄 Converting file:// to HTTP: ${urlString} -> ${localUrl}`
+            );
+            return originalFetch(localUrl, init);
+          } catch (e) {
+            console.error("Error parsing file:// URL:", e);
+          }
+        }
+
+        // Intercept ALL HuggingFace URLs for our model (catch any variation)
+        if (
+          urlString.includes("local-functiongemma-270m") ||
+          (urlString.includes("huggingface.co") &&
+            urlString.includes("local-functiongemma"))
+        ) {
+          console.log(`✅ Intercepting HuggingFace URL: ${urlString}`);
+          // Extract the file path from HuggingFace URL structure
+          // Example: https://huggingface.co/local-functiongemma-270m/resolve/main/config.json
+          // We want: /config.json (files are directly in models directory)
+          let filePath = "";
+          try {
+            const urlObj = new URL(urlString);
+            filePath = urlObj.pathname;
+
+            // Handle HuggingFace path structure: /local-functiongemma-270m/resolve/main/config.json
+            if (filePath.includes("/resolve/main/")) {
+              // Extract everything after /resolve/main/
+              filePath = filePath.split("/resolve/main/")[1];
+              // Remove any leading slashes
+              filePath = filePath.replace(/^\/+/, "");
+              // Add single leading slash
+              filePath = "/" + filePath;
+            } else if (filePath.includes("local-functiongemma-270m")) {
+              // If no /resolve/main/, try to extract filename from path
+              // Path might be: /local-functiongemma-270m/config.json
+              const parts = filePath.split("local-functiongemma-270m");
+              if (parts.length > 1) {
+                filePath = parts[1].replace(/^\/+/, "/");
+              } else {
+                filePath = "/config.json";
+              }
+            }
+          } catch (e) {
+            // If URL parsing fails, try to extract path manually using regex
+            const resolveMatch = urlString.match(/\/resolve\/main\/([^?#]+)/);
+            if (resolveMatch) {
+              filePath = "/" + resolveMatch[1];
+            } else {
+              // Try to extract filename from URL
+              const filenameMatch = urlString.match(
+                /\/([^\/]+\.(json|bin|safetensors|model|txt|jinja))(?:\?|$|#)/
+              );
+              if (filenameMatch) {
+                filePath = "/" + filenameMatch[1];
+              } else {
+                filePath = "/config.json"; // Default
+              }
+            }
+          }
+
+          // Ensure path starts with / and doesn't have double slashes
+          filePath = "/" + filePath.replace(/^\/+/, "").replace(/\/+/g, "/");
+
+          const localUrl = `${modelServerUrl}${filePath}`;
+          console.log(
+            `🔄 Redirecting to local server: ${urlString} -> ${localUrl}`
+          );
+          return originalFetch(localUrl, init);
+        }
+
+        return originalFetch(url, init);
+      };
+
+      // Override both env.fetch and global fetch to ensure we catch all requests
+      env.fetch = customFetch;
+      window.fetch = customFetch;
+
+      console.log("✅ Custom fetch interceptor installed");
+
+      // Function schemas for FunctionGemma
+      const formFunctionSchemas = [
+        {
+          type: "function",
+          function: {
+            name: "set_user_name",
+            description:
+              "Sets the user's full name in the registration form. ALWAYS call this function when the user mentions their name, such as 'My name is X', 'I am X', 'name is X', or 'call me X'. This is a REQUIRED function if the user provides their name.",
+            parameters: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description:
+                    "The user's full name. Extract only from the user's actual input. Look for phrases like 'My name is', 'I am', 'name is', etc.",
+                },
+              },
+              required: ["name"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "set_user_age",
+            description:
+              "Sets the user's age in the registration form. Use this when the user mentions their age or how old they are.",
+            parameters: {
+              type: "object",
+              properties: {
+                age: {
+                  type: "string",
+                  description:
+                    "The user's age as a number string. Extract only from the user's actual input.",
+                },
+              },
+              required: ["age"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "set_user_sex",
+            description:
+              "Sets the user's sex/gender in the registration form. Use this when the user mentions being male, female, or other gender. Do NOT use this for pincode or postal code.",
+            parameters: {
+              type: "object",
+              properties: {
+                sex: {
+                  type: "string",
+                  description:
+                    "The user's sex: must be exactly 'male', 'female', or 'other'. Extract from words like 'male', 'female', 'man', 'woman', 'boy', 'girl'.",
+                  enum: ["male", "female", "other"],
+                },
+              },
+              required: ["sex"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "set_user_address",
+            description:
+              "Sets the user's address in the registration form. **MANDATORY**: You MUST call this function when the user mentions their address, where they live, their location, or phrases like 'I live at', 'address is', 'residing at', 'location is', 'street', or 'city'. Extract the full address including street name, city, and any other location details the user provides.",
+            parameters: {
+              type: "object",
+              properties: {
+                address: {
+                  type: "string",
+                  description:
+                    "The user's full address including street, city, and any other location details. Extract everything the user says about their address or location.",
+                },
+              },
+              required: ["address"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "set_user_pincode",
+            description:
+              "Sets the user's pincode/postal code in the registration form. Use this ONLY when the user explicitly mentions a 6-digit postal code or pincode number. Do NOT use this for age, sex, or name. Do NOT extract pincode from examples in function descriptions.",
+            parameters: {
+              type: "object",
+              properties: {
+                pincode: {
+                  type: "string",
+                  description:
+                    "A 6-digit postal code or pincode number. Must be numeric digits only. Only extract this from the user's actual input, not from examples.",
+                },
+              },
+              required: ["pincode"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "submit_form",
+            description:
+              "Submits the user registration form. **MANDATORY**: You MUST call this function when the user mentions ANY of these words: 'submit', 'submit the form', 'send', 'finalize', 'done', 'submit it', 'go ahead', 'send it', 'finalize it', 'complete', 'complete the form'. This function MUST be called as the VERY LAST function call, after all other form field functions (set_user_name, set_user_age, set_user_sex, etc.) have been called. This is REQUIRED and NON-NEGOTIABLE when submission is requested.",
+            parameters: {
+              type: "object",
+              properties: {},
+              required: [],
+            },
+          },
+        },
+      ];
+
+      // FunctionGemma integration
+      let functionGemmaGenerator = null;
+      let isLoading = false;
+
+      // Get model path from Electron if available
+      function getModelPath() {
+        // Use a fake HuggingFace model ID that we'll intercept
+        // This prevents transformers.js from constructing malformed URLs
+        return "local-functiongemma-270m";
+      }
+
+      // Get the actual server URL
+      function getModelServerUrl() {
+        if (window.electronAPI && window.electronAPI.getModelPath) {
+          return window.electronAPI.getModelPath();
+        }
+        return "http://localhost:8766";
+      }
+
+      // Python API server URL
+      const PYTHON_API_URL = "http://localhost:5000";
+
+      async function checkPythonAPI() {
+        try {
+          const response = await fetch(`${PYTHON_API_URL}/health`);
+          const data = await response.json();
+          return data.status === "ok";
+        } catch (error) {
+          console.error("❌ Python API not available:", error);
+          return false;
+        }
+      }
+
+      async function loadFunctionGemma() {
+        // Check if Python API is available
+        const apiAvailable = await checkPythonAPI();
+        if (!apiAvailable) {
+          throw new Error(
+            "Python API server is not running. Please start it with: python api_server.py"
+          );
+        }
+        console.log("✅ Python API server is available");
+        return true; // API is ready
+      }
+
+      // Extract all function calls from output (handles multiple calls)
+      function extractAllFunctionCalls(output) {
+        // Note: Use .*? instead of .+? to allow empty braces for functions with no args (like submit_form)
+        const pattern =
+          /<start_function_call>call:(\w+)\{(.*?)\}<end_function_call>/g;
+        const calls = [];
+        let match;
+
+        while ((match = pattern.exec(output)) !== null) {
+          const funcName = match[1];
+          const argsStr = match[2];
+          const args = {};
+          // Only parse arguments if argsStr is not empty
+          if (argsStr.trim()) {
+            const argPattern = /(\w+):<escape>(.+?)<escape>/g;
+            let argMatch;
+
+            while ((argMatch = argPattern.exec(argsStr)) !== null) {
+              args[argMatch[1]] = argMatch[2];
+            }
+          }
+
+          calls.push({ name: funcName, args });
+        }
+
+        return calls;
+      }
+
+      // Main function to fill form from natural language
+      async function fillForm(naturalLanguageInput) {
+        try {
+          // Check if Python API is available
+          await loadFunctionGemma();
+
+          console.log(`💬 Processing: "${naturalLanguageInput}"`);
+
+          // Call Python API
+          const response = await fetch(`${PYTHON_API_URL}/process`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              input: naturalLanguageInput,
+              function_schemas: formFunctionSchemas,
+            }),
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || "API request failed");
+          }
+
+          const data = await response.json();
+          const functionCalls = data.function_calls || [];
+          const generatedText = data.output;
+
+          console.log(`📤 FunctionGemma output: ${generatedText}`);
+
+          // Execute function calls using Selenium (instead of JavaScript)
+          if (functionCalls.length > 0) {
+            // Call Selenium execution endpoint
+            const executeResponse = await fetch(`${PYTHON_API_URL}/execute`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                function_calls: functionCalls,
+              }),
+            });
+
+            if (!executeResponse.ok) {
+              const error = await executeResponse.json();
+              throw new Error(error.error || "Selenium execution failed");
+            }
+
+            const executeData = await executeResponse.json();
+            console.log(
+              `✅ Selenium executed ${executeData.executed_count} function(s)`
+            );
+            console.log(`📥 Results:`, executeData.results);
+
+            if (executeData.executed_count === 0) {
+              return "⚠️ No valid function calls were executed";
+            }
+
+            return `✅ Form updated with ${executeData.executed_count} field(s) via Selenium`;
+          } else {
+            // Fallback: try parsing the output text directly
+            const parsedCalls = extractAllFunctionCalls(generatedText);
+            if (parsedCalls.length > 0) {
+              // Execute via Selenium
+              const executeResponse = await fetch(`${PYTHON_API_URL}/execute`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  function_calls: parsedCalls,
+                }),
+              });
+
+              if (executeResponse.ok) {
+                const executeData = await executeResponse.json();
+                return `✅ Form updated with ${executeData.executed_count} field(s) via Selenium`;
+              } else {
+                const error = await executeResponse.json();
+                throw new Error(error.error || "Selenium execution failed");
+              }
+            }
+            return "⚠️ No function calls found in output";
+          }
+        } catch (error) {
+          console.error("❌ Error:", error);
+          return `Error: ${error.message}`;
+        }
+      }
+
+      // Expose globally for console use
+      window.fillForm = fillForm;
+      window.loadFunctionGemma = loadFunctionGemma;
+      window.formFunctionSchemas = formFunctionSchemas;
+
+      console.log(
+        "🎉 Form filling ready! Use fillForm('your natural language') in the console"
+      );
+      console.log(
+        "Example: fillForm('My name is John Doe, I am 30 years old, male, living at 123 Main St, Bangalore, pincode 560001')"
+      );
+    </script>
+  </body>
+</html>
