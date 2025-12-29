@@ -767,8 +767,8 @@
         return "http://localhost:8766";
       }
 
-      // Python API server URL
-      const PYTHON_API_URL = "http://localhost:5000";
+      // Python API server URL (use 127.0.0.1 to force IPv4)
+      const PYTHON_API_URL = "http://127.0.0.1:5000";
 
       async function checkPythonAPI() {
         try {
