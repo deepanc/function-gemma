@@ -24,7 +24,8 @@ processor = None
 model = None
 
 # Global Selenium driver
-selenium_driver = None
+selenium_driver_links = None
+
 
 def get_current_temperature(location: str) -> str:
     """Mock implementation - replace with real API call (e.g., OpenWeatherMap)"""
@@ -86,87 +87,180 @@ def load_model():
             model = AutoModelForCausalLM.from_pretrained(LOCAL_MODEL_PATH, device_map="auto")
             print("Model loaded with auto device mapping!")
 
-def get_selenium_driver():
-    """Initialize and return Selenium WebDriver"""
-    global selenium_driver
-    if selenium_driver is None:
+
+
+def is_driver_alive(driver):
+    """Check if a Selenium driver is still valid and the browser window is open"""
+    try:
+        # Try to access a property that requires the browser to be open
+        _ = driver.current_url
+        return True
+    except Exception:
+        return False
+
+def get_selenium_driver_for_links():
+    """Initialize and return Selenium WebDriver for links.html"""
+    global selenium_driver_links
+    # Check if driver exists and is still alive
+    if selenium_driver_links is None or not is_driver_alive(selenium_driver_links):
+        # If driver was closed, reset it
+        if selenium_driver_links is not None:
+            print("🔄 Selenium driver for links was closed, recreating...")
+            selenium_driver_links = None
+        
         chrome_options = Options()
         # Uncomment if you want headless mode
         # chrome_options.add_argument('--headless')
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--no-sandbox')
         
-        selenium_driver = webdriver.Chrome(options=chrome_options)
-        # Load the HTML file
-        html_path = os.path.abspath("user-registration/index.html")
-        selenium_driver.get(f"file://{html_path}")
-        # Wait for form to load
-        WebDriverWait(selenium_driver, 10).until(
-            EC.presence_of_element_located((By.ID, "userForm"))
+        selenium_driver_links = webdriver.Chrome(options=chrome_options)
+        # Load the links HTML file
+        html_path = os.path.abspath("user-registration/links.html")
+        selenium_driver_links.get(f"file://{html_path}")
+        # Wait for links to load (check for close button to ensure page is fully loaded)
+        WebDriverWait(selenium_driver_links, 10).until(
+            EC.presence_of_element_located((By.ID, "close_button"))
         )
-        print(f"✅ Selenium driver initialized and loaded: {html_path}")
-    return selenium_driver
+        print(f"✅ Selenium driver for links initialized and loaded: {html_path}")
+    return selenium_driver_links
 
 def execute_selenium_function(func_name, args):
-    """Execute form functions using Selenium"""
-    driver = get_selenium_driver()
+    """Execute Selenium WebDriver functions - supports dynamic driver selection"""
+    global selenium_driver_links
+
+    
+    element_id = args.get("id", "")
+    
+    # Validation
+    if not element_id and func_name == "submit_form":
+        # submit_form might not have an ID, uses CSS selector
+        pass
+    elif not element_id:
+        return f"Error executing {func_name}: No ID provided"
+
+    # Helper to check if element exists in a driver
+    def element_exists(drv, eid):
+        try:
+            # Check if driver is alive first
+            if not is_driver_alive(drv):
+                return False
+            return len(drv.find_elements(By.ID, eid)) > 0
+        except:
+            return False
+
+    # Determine which driver to use
+    driver = None
+    
+    # 1. Check Links Driver (links.html)
+    d_links = get_selenium_driver_for_links()
+    
+    # Check if element exists in current links driver state
+    if element_id and element_exists(d_links, element_id):
+        driver = d_links
+    
+    # 2. If not found in links driver, check if we need to restore links.html
+    # This handles the case where we drifted (e.g. clicked to Google) but want to interact with links.html again
+    if driver is None and d_links:
+        try:
+            curr_url = d_links.current_url
+            html_path = os.path.abspath("user-registration/links.html")
+            is_links_page = curr_url.startswith("file://") and "links.html" in curr_url
+            
+            # If we are NOT on links.html, and we couldn't find the element, 
+            # maybe it's on links.html? Let's check by restoring.
+            if not is_links_page:
+                # We can't know for sure if the element is on links.html without loading it,
+                # but we want to avoid loading index.html if possible.
+                # Heuristic: If we are drifted, let's try restoring links.html first.
+                print(f"DEBUG: Element {element_id} not found and links driver drifted. Restoring links.html...")
+                d_links.get(f"file://{html_path}")
+                WebDriverWait(d_links, 10).until(
+                    EC.presence_of_element_located((By.ID, "close_button"))
+                )
+                
+                # Check again after restore
+                if element_exists(d_links, element_id):
+                    driver = d_links
+                    print(f"DEBUG: Found {element_id} after restoring links.html")
+                else:
+                     # If still not found, we might want to go back? 
+                     # But for now let's just proceed to check Form driver.
+                     # (Ideally we'd restore previous URL if failed, but that's complex)
+                     pass
+        except Exception as e:
+            print(f"DEBUG: Error ensuring links page: {e}")
+
+    # 3. Check Form Driver (index.html) -> REMOVED
+    # 4. Fallback: Default to links driver
+    if driver is None:
+        driver = get_selenium_driver_for_links()
+
+            
+    # Initialize wait
     wait = WebDriverWait(driver, 10)
     
     try:
-        if func_name == "set_user_name":
-            field = driver.find_element(By.ID, "name")
-            field.clear()
-            field.send_keys(args.get("name", ""))
-            return f"Set name to: {args.get('name')}"
+        if func_name == "find_element_by_id":
+            element = driver.find_element(By.ID, args.get("id", ""))
+            return f"Found element by ID: {args.get('id')}"
         
-        elif func_name == "set_user_age":
-            field = driver.find_element(By.ID, "age")
-            field.clear()
-            field.send_keys(str(args.get("age", "")))
-            return f"Set age to: {args.get('age')}"
+        elif func_name == "send_keys":
+            element_id = args.get("id", "")
+            text = args.get("text", "")
+            
+            element = driver.find_element(By.ID, element_id)
+            element.clear()
+            element.send_keys(text)
+            return f"Sent keys '{text}' to element with ID: {element_id}"
         
-        elif func_name == "set_user_sex":
-            dropdown = Select(driver.find_element(By.ID, "sex"))
-            sex_value = args.get("sex", "").lower()
-            dropdown.select_by_value(sex_value)
-            return f"Set sex to: {sex_value}"
+        elif func_name == "click_element":
+            element_id = args.get("id", "")
+            
+            # Special handling for Links driver navigation - strict enforcement for click_element
+            if driver == selenium_driver_links:
+                 # Logic already handled by restoration above OR we are on external page and found element
+                 # But original logic had strict enforcement. 
+                 # If we found element on Google (external), we should click it there.
+                 # If we restored links.html (above), we click it there.
+                 pass
+
+            # Find and click the element
+            element = driver.find_element(By.ID, element_id)
+            element.click()
+            
+            # If the close button was clicked (specific to links.html)
+            if element_id == "close_button" and driver == selenium_driver_links:
+                time.sleep(1)
+                driver.quit()
+                selenium_driver_links = None
+                return f"Clicked element with ID: {element_id} and closed browser"
+            
+            return f"Clicked element with ID: {element_id}"
         
-        elif func_name == "set_user_address":
-            field = driver.find_element(By.ID, "address")
-            field.clear()
-            field.send_keys(args.get("address", ""))
-            return f"Set address to: {args.get('address')}"
-        
-        elif func_name == "set_user_pincode":
-            field = driver.find_element(By.ID, "pincode")
-            field.clear()
-            field.send_keys(str(args.get("pincode", "")))
-            return f"Set pincode to: {args.get('pincode')}"
+        elif func_name == "select_dropdown_by_value":
+            element_id = args.get("id", "")
+            value = args.get("value", "")
+            
+            element = driver.find_element(By.ID, element_id)
+            dropdown = Select(element)
+            dropdown.select_by_value(value)
+            return f"Selected value '{value}' in dropdown with ID: {element_id}"
         
         elif func_name == "submit_form":
-            # Wait before submitting so user can see the filled form
-            print("⏳ Waiting 2 seconds before submitting form...")
+            element_id = args.get("id", "")
+            
+            if element_id:
+                element = driver.find_element(By.ID, element_id)
+            else:
+                element = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+            
             time.sleep(2)
+            element.click()
             
-            button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
-            button.click()
-            
-            # Wait for success overlay
-            wait.until(EC.visibility_of_element_located((By.ID, "successOverlay")))
-            print("✅ Form submitted successfully - success overlay visible")
-            
-            # Wait after submission so user can see the success message
-            print("⏳ Waiting 3 seconds to show success message...")
-            time.sleep(3)
-            
-            # Close the browser
-            print("🔒 Closing browser...")
-            driver.quit()
-            global selenium_driver
-            selenium_driver = None
-            print("✅ Browser closed")
-            
-            return "Form submitted successfully and browser closed"
+            # Only wait for success overlay if we are on the form page
+            return "Form submitted"
+
         
         else:
             return f"Error: Unknown function '{func_name}'"
@@ -179,289 +273,7 @@ def health():
     """Health check endpoint"""
     return jsonify({"status": "ok", "model_loaded": model is not None})
 
-@app.route('/process', methods=['POST'])
-def process_input():
-    """
-    Process natural language input and return function calls
-    
-    Request body:
-    {
-        "input": "My name is John Doe, I am 30 years old",
-        "function_schemas": [...]  # Optional: custom function schemas
-    }
-    
-    Response:
-    {
-        "output": "<start_function_call>call:set_user_name{name:<escape>John Doe<escape>}<end_function_call>",
-        "function_calls": [
-            {"name": "set_user_name", "args": {"name": "John Doe"}}
-        ]
-    }
-    """
-    try:
-        data = request.json
-        user_input = data.get('input', '')
-        function_schemas = data.get('function_schemas', [])
-        
-        if not user_input:
-            return jsonify({"error": "No input provided"}), 400
-        
-        # Load model if not already loaded
-        load_model()
-        
-        # Build the message with improved context
-        system_message = (
-            "You are a model that can do function calling. "
-            "**CRITICAL INSTRUCTION**: When the user provides multiple pieces of information, "
-            "you MUST generate ALL corresponding function calls in a SINGLE response, one after another. "
-            "Do NOT stop after a few calls - continue until ALL information is processed.\n"
-            "\n"
-            "Generate function calls in this exact order:\n"
-            "1. set_user_name (if name mentioned)\n"
-            "2. set_user_age (if age mentioned)\n"
-            "3. set_user_sex (if sex mentioned)\n"
-            "4. set_user_address (if address/location mentioned)\n"
-            "5. set_user_pincode (if pincode mentioned)\n"
-            "6. submit_form (if submit/send/finalize mentioned) - MUST be last\n"
-            "\n"
-            "CRITICAL RULES - FOLLOW THESE EXACTLY:\n"
-            "1. **MANDATORY**: Generate ALL function calls for which the user provides information.\n"
-            "2. Generate them ALL in sequence - do not stop early.\n"
-            "3. If user says 'My name is John Doe, I am 30 years old, male, I live at 123 Main Street, Bangalore, pincode 560001, submit the form', "
-            "you MUST generate ALL SIX calls: set_user_name, set_user_age, set_user_sex, set_user_address, set_user_pincode, submit_form.\n"
-            "4. Do NOT stop after 2-3 calls - continue until ALL are generated.\n"
-            "5. If the user mentions their name (e.g., 'My name is X' or 'I am X'), you MUST call set_user_name.\n"
-            "6. If the user mentions their age (e.g., 'I am 30 years old' or 'age 30'), you MUST call set_user_age.\n"
-            "7. If the user mentions sex/gender (e.g., 'male', 'female', 'I am a man'), you MUST call set_user_sex.\n"
-            "8. If the user mentions an address, location, or where they live (e.g., 'I live at X', 'address is X', 'residing at X', 'location X'), you MUST call set_user_address.\n"
-            "9. If the user mentions a pincode, postal code, zip code, or similar, you MUST call set_user_pincode.\n"
-            "10. **MANDATORY**: If the user mentions ANY of these words: 'submit', 'send', 'finalize', 'done', 'complete', 'go ahead', 'submit it', 'send it', 'finalize it', you MUST call submit_form() as the VERY LAST function call.\n"
-            "11. Do NOT make up or invent values - only extract what the user actually says.\n"
-            "12. Do NOT extract values from examples in function descriptions.\n"
-            "\n"
-            "Example 1: If user says 'My name is John Doe, I am 30 years old, male', "
-            "you MUST call: set_user_name(name='John Doe'), set_user_age(age='30'), set_user_sex(sex='male'). "
-            "Do NOT call set_user_pincode or set_user_address.\n"
-            "\n"
-            "Example 2: If user says 'My name is John Doe, I am 30 years old, male, submit the form', "
-            "you MUST call: set_user_name(name='John Doe'), set_user_age(age='30'), set_user_sex(sex='male'), submit_form(). "
-            "The submit_form() call MUST be the LAST function call.\n"
-            "\n"
-            "Example 3: If user says 'My name is John Doe, I am 30, male, pincode 560001, submit', "
-            "you MUST call: set_user_name(name='John Doe'), set_user_age(age='30'), set_user_sex(sex='male'), set_user_pincode(pincode='560001'), submit_form(). "
-            "Notice submit_form() is ALWAYS last.\n"
-            "\n"
-            "Example 4: If user says 'My name is John Doe, I am 30 years old, male, I live at 123 Main Street, Bangalore, pincode 560001, submit the form', "
-            "you MUST call ALL SIX of these in sequence: "
-            "set_user_name(name='John Doe'), "
-            "set_user_age(age='30'), "
-            "set_user_sex(sex='male'), "
-            "set_user_address(address='123 Main Street, Bangalore'), "
-            "set_user_pincode(pincode='560001'), "
-            "submit_form(). "
-            "Do NOT skip any. Generate ALL SIX calls."
-        )
-        
-        message = [
-            {
-                "role": "developer",
-                "content": system_message
-            },
-            {
-                "role": "user",
-                "content": user_input
-            }
-        ]
-        
-        # Get model's response (should be a function call)
-        inputs = processor.apply_chat_template(
-            message, 
-            tools=function_schemas if function_schemas else None, 
-            add_generation_prompt=True, 
-            return_dict=True, 
-            return_tensors="pt"
-        )
-        
-        # Try multiple generation strategies to get all function calls
-        # Strategy 1: Greedy with repetition penalty
-        generation_kwargs = {
-            **inputs.to(model.device),
-            "pad_token_id": processor.eos_token_id,
-            "max_new_tokens": 1536,
-            "do_sample": False,
-            "repetition_penalty": 1.15,  # Moderate penalty to prevent early stopping without excessive repetition
-        }
-        
-        # Try to add min_new_tokens if supported (some transformers versions)
-        try:
-            generation_kwargs["min_new_tokens"] = 400
-        except:
-            pass  # Ignore if not supported
-        
-        out = model.generate(**generation_kwargs)
-        output = processor.decode(out[0][len(inputs["input_ids"][0]):], skip_special_tokens=True)
-        
-        # Log the raw output for debugging
-        print(f"\n📤 Raw model output: {output}")
-        print(f"📥 User input was: {user_input}")
-        print(f"📏 Output length: {len(output)} characters")
-        print(f"📊 Generated tokens: {out[0].shape[0] - inputs['input_ids'].shape[1]}")
-        
-        # Check if output might be truncated
-        if not output.rstrip().endswith('>'):
-            print("⚠️ Warning: Output might be truncated (doesn't end with '>')")
-        
-        # Check if output is suspiciously short
-        if len(output) < 300:
-            print(f"⚠️ WARNING: Output is very short ({len(output)} chars). Model may have stopped early.")
-            print(f"   This could indicate the model hit an EOS token prematurely.")
-            print(f"   Consider: 1) The model might be too small (270M) for complex multi-call scenarios")
-            print(f"             2) The prompt might need to be more explicit")
-            print(f"             3) Try breaking the input into smaller chunks")
-        
-        # Count expected function calls based on user input
-        expected_calls = []
-        user_input_lower = user_input.lower()
-        if any(word in user_input_lower for word in ["name is", "i am", "my name"]):
-            expected_calls.append("set_user_name")
-        if any(word in user_input_lower for word in ["years old", "age", "i am"]):
-            expected_calls.append("set_user_age")
-        if any(word in user_input_lower for word in ["male", "female", "other", "man", "woman"]):
-            expected_calls.append("set_user_sex")
-        if any(word in user_input_lower for word in ["address", "live", "lives", "living", "residing", "location", "street", "city", "at ", "live at"]):
-            expected_calls.append("set_user_address")
-        if any(word in user_input_lower for word in ["pincode", "postal code", "zip code", "zip", "postcode"]):
-            expected_calls.append("set_user_pincode")
-        if any(word in user_input_lower for word in ["submit", "send", "finalize", "done", "complete"]):
-            expected_calls.append("submit_form")
-        print(f"🔍 Expected function calls based on input: {expected_calls}")
-        
-        # Define valid function names
-        VALID_FUNCTION_NAMES = {
-            "set_user_name",
-            "set_user_age", 
-            "set_user_sex",
-            "set_user_address",
-            "set_user_pincode",
-            "submit_form"
-        }
-        
-        # Parse function calls
-        function_calls = []
-        seen_functions = set()  # Track which functions we've already seen to avoid duplicates
-        
-        # Extract all function calls (handle multiple)
-        # Note: Use .*? instead of .+? to allow empty braces for functions with no args (like submit_form)
-        pattern = r'<start_function_call>call:(\w+)\{(.*?)\}<end_function_call>'
-        for match in re.finditer(pattern, output):
-            func_name = match.group(1)
-            
-            # Validate function name - only allow known functions
-            if func_name not in VALID_FUNCTION_NAMES:
-                print(f"⚠️ Skipping invalid function name: {func_name} (not in valid list)")
-                continue
-            
-            # Deduplicate - only keep first occurrence of each function
-            if func_name in seen_functions:
-                print(f"⚠️ Skipping duplicate function call: {func_name} (already processed)")
-                continue
-            
-            seen_functions.add(func_name)
-            
-            args_str = match.group(2)
-            args = {}
-            # Only parse arguments if args_str is not empty
-            if args_str.strip():
-                arg_pattern = r'(\w+):<escape>(.+?)<escape>'
-                for arg_match in re.finditer(arg_pattern, args_str):
-                    key = arg_match.group(1)
-                    value = arg_match.group(2)
-                    args[key] = value
-            function_calls.append({"name": func_name, "args": args})
-            print(f"🔧 Parsed function call: {func_name} with args: {args}")
-        
-        print(f"📊 Total valid function calls parsed from model output: {len(function_calls)}")
-        
-        # Post-process: Filter out invalid function calls
-        filtered_calls = []
-        user_input_lower = user_input.lower()
-        
-        for call in function_calls:
-            # Filter out pincode if user didn't mention pincode/postal code/zip
-            if call["name"] == "set_user_pincode":
-                pincode_keywords = ["pincode", "postal code", "zip code", "zip", "postcode", "pin code"]
-                if not any(keyword in user_input_lower for keyword in pincode_keywords):
-                    print(f"⚠️ Filtering out pincode call - user didn't mention pincode. Value was: {call.get('args', {}).get('pincode', 'N/A')}")
-                    continue
-                # Check if pincode args are empty - this indicates a parsing issue
-                pincode_value = call.get('args', {}).get('pincode', '')
-                if not pincode_value or pincode_value == '':
-                    print(f"⚠️ WARNING: set_user_pincode has empty args. This might be a parsing issue.")
-                    print(f"   Raw function call in output might be malformed. Check the raw output above.")
-                    # Try to extract pincode from user input as fallback
-                    pincode_match = re.search(r'\b(\d{6})\b', user_input)
-                    if pincode_match:
-                        pincode_value = pincode_match.group(1)
-                        call['args']['pincode'] = pincode_value
-                        print(f"   ✅ Extracted pincode from user input: {pincode_value}")
-                    else:
-                        print(f"   ❌ Could not extract pincode from user input")
-                        continue
-            
-            # Filter out address if user didn't mention address
-            if call["name"] == "set_user_address":
-                address_keywords = ["address", "live", "lives", "living", "residing", "reside", "location", "street", "city", "residence", "at ", "live at", "lives at", "residing at", "reside at"]
-                if not any(keyword in user_input_lower for keyword in address_keywords):
-                    print(f"⚠️ Filtering out address call - user didn't mention address. User input: {user_input_lower[:100]}")
-                    continue
-                else:
-                    print(f"✅ Address call validated - found address keyword in user input")
-            
-            filtered_calls.append(call)
-        
-        # Ensure submit_form is always last if present
-        submit_form_call = None
-        other_calls = []
-        for call in filtered_calls:
-            if call["name"] == "submit_form":
-                submit_form_call = call
-            else:
-                other_calls.append(call)
-        
-        # Reorder: all other calls first, then submit_form
-        if submit_form_call:
-            filtered_calls = other_calls + [submit_form_call]
-            print(f"✅ Reordered calls: submit_form moved to last position")
-        
-        if not filtered_calls:
-            print("⚠️ No valid function calls found after filtering")
-        else:
-            print(f"✅ {len(filtered_calls)} valid function call(s) after filtering")
-            print(f"📋 Filtered calls: {[call['name'] for call in filtered_calls]}")
-            
-        # Compare expected vs actual
-        actual_call_names = [call['name'] for call in filtered_calls]
-        missing_calls = [call for call in expected_calls if call not in actual_call_names]
-        if missing_calls:
-            print(f"⚠️ WARNING: Expected calls not found in output: {missing_calls}")
-            print(f"   Model only generated {len(function_calls)} calls but {len(expected_calls)} were expected")
-            print(f"   This might indicate the model didn't generate all required function calls or stopped early.")
-            print(f"   Raw output length: {len(output)} characters")
-            if len(output) < 500:
-                print(f"   ⚠️ Output seems short - model may have stopped early.")
-                print(f"   NOTE: The 270M model may be too small to reliably generate all 6 function calls in sequence.")
-                print(f"   Suggestions:")
-                print(f"   1. Try breaking the input into smaller chunks (e.g., fill fields first, then submit)")
-                print(f"   2. Use a larger model if available")
-                print(f"   3. The model might work better with fewer fields at once")
-        
-        return jsonify({
-            "output": output,
-            "function_calls": filtered_calls
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/execute', methods=['POST'])
 def execute_functions():
@@ -494,30 +306,6 @@ def execute_functions():
             func_name = call.get('name')
             args = call.get('args', {})
             
-            # Validate function calls before executing
-            if func_name == "set_user_pincode":
-                pincode = args.get("pincode", "")
-                if not pincode or not pincode.isdigit() or len(pincode) != 6:
-                    print(f"⚠️ Skipping invalid pincode call: {pincode}")
-                    continue
-            
-            if func_name == "set_user_sex":
-                sex = args.get("sex", "").lower()
-                if sex not in ["male", "female", "other"]:
-                    print(f"⚠️ Skipping invalid sex call: {sex}")
-                    continue
-            
-            if func_name == "set_user_age":
-                age = args.get("age", "")
-                try:
-                    age_num = int(age)
-                    if age_num < 1 or age_num > 120:
-                        print(f"⚠️ Skipping invalid age call: {age}")
-                        continue
-                except ValueError:
-                    print(f"⚠️ Skipping invalid age call: {age}")
-                    continue
-            
             result = execute_selenium_function(func_name, args)
             results.append(result)
             print(f"🔧 Selenium executed: {func_name} with args: {args}")
@@ -530,15 +318,221 @@ def execute_functions():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/processLink', methods=['POST'])
+def process_link():
+    """
+    Process natural language input and return click_element function calls
+    
+    Request body:
+    {
+        "input": "Click the Google link",
+        "function_schemas": [...]  # Optional: custom function schemas
+    }
+    
+    Response:
+    {
+        "output": "<start_function_call>call:click_element{id:<escape>google-link<escape>}<end_function_call>",
+        "function_calls": [
+            {"name": "click_element", "args": {"id": "google-link"}}
+        ]
+    }
+    """
+    try:
+        data = request.json
+        user_input = data.get('input', '')
+        function_schemas = data.get('function_schemas', [])
+        
+        if not user_input:
+            return jsonify({"error": "No input provided"}), 400
+        
+        # Load model if not already loaded
+        load_model()
+        
+        # Build the message focused on interacting with elements
+        system_message = (
+            "You are a model that can do function calling with the following functions. "
+            "Your task is to identify which element to interact with based on the user's input and generate "
+            "the appropriate function call (click_element or send_keys).\n"
+            "\n"
+            "**AVAILABLE ELEMENT IDs (links.html):**\n"
+            "- Links: google-link, github-link, stackoverflow-link, wikipedia-link, example-link\n"
+            "- Inputs: search-box (for searching), feedback-box (for feedback)\n"
+            "- Buttons: close_button\n"
+            "- IMPORTANT: Use ONLY these exact IDs. Do not invent new IDs like 'search_field' or 'search_box_id'.\n"
+            "\n"
+            "**INSTRUCTIONS:**\n"
+            "1. If the user wants to click a link or button, use click_element(id='element_id')\n"
+            "2. If the user wants to type/input text, use send_keys(id='element_id', text='content')\n"
+            "3. Use the exact IDs provided above.\n"
+        )
+        
+        # Create click_element function schema
+        click_element_schema = {
+            "type": "function",
+            "function": {
+                "name": "click_element",
+                "description": "Clicks a web element (link, button, etc.) by its ID. Use this to click any clickable element on the page.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "The ID of the element to click."
+                        }
+                    },
+                    "required": ["id"]
+                }
+            }
+        }
+        
+        # Create send_keys function schema
+        send_keys_schema = {
+            "type": "function",
+            "function": {
+                "name": "send_keys",
+                "description": "Types text into an input field identified by its ID.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "The ID of the input field."
+                        },
+                        "text": {
+                            "type": "string",
+                            "description": "The text to type into the field."
+                        }
+                    },
+                    "required": ["id", "text"]
+                }
+            }
+        }
+        
+        # Use schemas if no custom schemas provided
+        if not function_schemas:
+            function_schemas = [click_element_schema, send_keys_schema]
+        
+        message = [
+            {
+                "role": "developer",
+                "content": system_message
+            },
+            {
+                "role": "user",
+                "content": user_input
+            }
+        ]
+        
+        # Get model's response (should be a function call)
+        inputs = processor.apply_chat_template(
+            message, 
+            tools=function_schemas, 
+            add_generation_prompt=True, 
+            return_dict=True, 
+            return_tensors="pt"
+        )
+        
+        # Generate with parameters optimized for single function call
+        generation_kwargs = {
+            **inputs.to(model.device),
+            "pad_token_id": processor.eos_token_id,
+            "max_new_tokens": 512,  # Less tokens needed for single click
+            "do_sample": False,
+            "repetition_penalty": 1.1,
+        }
+        
+        out = model.generate(**generation_kwargs)
+        output = processor.decode(out[0][len(inputs["input_ids"][0]):], skip_special_tokens=True)
+        
+        # Log the raw output for debugging
+        print(f"\n📤 Raw model output (processLink): {output}")
+        print(f"📥 User input was: {user_input}")
+        
+        # Define valid function names
+        VALID_FUNCTION_NAMES = {
+            "click_element",
+            "send_keys"
+        }
+        
+        # Parse function calls
+        function_calls = []
+        pattern = r'<start_function_call>call:(\w+)\{(.*?)\}<end_function_call>'
+        for match in re.finditer(pattern, output):
+            func_name = match.group(1)
+            
+            # Validate function name
+            if func_name not in VALID_FUNCTION_NAMES:
+                print(f"⚠️ Skipping invalid function name: {func_name} (only click_element allowed)")
+                continue
+            
+            args_str = match.group(2)
+            args = {}
+            if args_str.strip():
+                arg_pattern = r'(\w+):<escape>(.+?)<escape>'
+                for arg_match in re.finditer(arg_pattern, args_str):
+                    key = arg_match.group(1)
+                    value = arg_match.group(2)
+                    args[key] = value
+            
+            function_calls.append({"name": func_name, "args": args})
+            print(f"🔧 Parsed function call: {func_name} with args: {args}")
+        
+        # Filter duplicates and validate arguments
+        filtered_calls = []
+        seen_actions = set() # Track unique actions to prevent duplicates
+        
+        for call in function_calls:
+            func_name = call["name"]
+            args = call.get("args", {})
+            element_id = args.get("id")
+            
+            if not element_id:
+                print(f"⚠️ Skipping {func_name} call - missing 'id' parameter")
+                continue
+                
+            action_key = f"{func_name}:{element_id}"
+            
+            if func_name == "click_element":
+                if action_key not in seen_actions:
+                    filtered_calls.append(call)
+                    seen_actions.add(action_key)
+            
+            elif func_name == "send_keys":
+                text = args.get("text")
+                if text:
+                    if action_key not in seen_actions:
+                        filtered_calls.append(call)
+                        seen_actions.add(action_key)
+                else:
+                     print(f"⚠️ Skipping send_keys call - missing 'text' parameter")
+
+        
+        if not filtered_calls:
+            print("⚠️ No valid calls found")
+        else:
+            print(f"✅ {len(filtered_calls)} valid call(s)")
+        
+        return jsonify({
+            "output": output,
+            "function_calls": filtered_calls
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/close_browser', methods=['POST'])
 def close_browser():
-    """Close the Selenium browser"""
-    global selenium_driver
+    """Close the Selenium browser(s)"""
+    global selenium_driver, selenium_driver_links
     if selenium_driver:
         selenium_driver.quit()
         selenium_driver = None
-        print("✅ Selenium browser closed")
-    return jsonify({"status": "browser closed"})
+        print("✅ Selenium browser (form) closed")
+    if selenium_driver_links:
+        selenium_driver_links.quit()
+        selenium_driver_links = None
+        print("✅ Selenium browser (links) closed")
+    return jsonify({"status": "browser(s) closed"})
 
 if __name__ == '__main__':
     print("=" * 50)
@@ -547,7 +541,8 @@ if __name__ == '__main__':
     print("Starting server on http://localhost:5000")
     print("Endpoints:")
     print("  GET  /health - Health check")
-    print("  POST /process - Process natural language input")
+
+    print("  POST /processLink - Process interaction requests (click_element, send_keys)")
     print("  POST /execute - Execute function calls using Selenium")
     print("  POST /close_browser - Close Selenium browser")
     print("=" * 50)
