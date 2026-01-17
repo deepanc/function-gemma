@@ -84,6 +84,11 @@
         <input type="text" id="feedback-box" placeholder="Type your feedback..."
           style="width: 100%; padding: 8px; box-sizing: border-box;">
       </div>
+      <div style="margin-bottom: 10px;">
+        <label for="newsletter-input" style="display: block; margin-bottom: 5px;">Newsletter (Name Only):</label>
+        <input type="text" name="newsletter" placeholder="Enter email for newsletter..."
+          style="width: 100%; padding: 8px; box-sizing: border-box;">
+      </div>
     </div>
 
     <button id="close_button" class="close-button">Close Page</button>
@@ -97,8 +102,8 @@
       try {
         console.log(`🔗 Processing click request: "${naturalLanguage}"`);
 
-        // Step 1: Send to /processLink endpoint
-        const processResponse = await fetch(`${PYTHON_API_URL}/processLink`, {
+        // Step 1: Send to /processInteraction endpoint
+        const processResponse = await fetch(`${PYTHON_API_URL}/processInteraction`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

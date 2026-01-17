@@ -62,7 +62,20 @@ def navigateToURL(url_or_filename):
     driver.get(target_url)
     return f"Navigated to {target_url}"
 
-def clickLink(natural_language_command):
+def enterText(natural_language_command):
+    """
+    Input text into a field using natural language (e.g. "enter 'hello' in search-box").
+    Directs to processInteraction to decide between ID and Name.
+    """
+    global driver
+    if driver is None:
+        init_driver()
+        
+    print(f"🤔 Processing text entry: '{natural_language_command}'...")
+    process_command(natural_language_command)
+
+
+def process_command(natural_language_command):
     """
     Send natural language command to API server and execute resulting Selenium actions.
     """
@@ -76,7 +89,7 @@ def clickLink(natural_language_command):
     try:
         # Call the API server to interpret the command
         response = requests.post(
-            f"{API_URL}/processLink",
+            f"{API_URL}/processInteraction",
             json={"input": natural_language_command}
         )
         
@@ -126,9 +139,33 @@ def execute_local_action(func_name, args):
             text = args.get("text", "")
             print(f"  ⌨️ Typing '{text}' into ID: {element_id}")
             
-            element = driver.find_element(By.ID, element_id)
+            try:
+                element = driver.find_element(By.ID, element_id)
+            except Exception:
+                print(f"  ⚠️ ID '{element_id}' not found. Trying NAME...", end=" ")
+                try:
+                    element = driver.find_element(By.NAME, element_id)
+                    print("✅ Found by NAME.")
+                except Exception:
+                    print("❌ Not found.")
+                    raise
+
             element.clear()
             element.send_keys(text)
+
+        elif func_name == "send_keys_by_name":
+            element_name = args.get("name")
+            text = args.get("text", "")
+            print(f"  ⌨️ Typing '{text}' into NAME: {element_name}")
+            
+            element = driver.find_element(By.NAME, element_name)
+            element.clear()
+            element.send_keys(text)
+            
+        elif func_name == "navigate_to_url":
+            url = args.get("url")
+            print(f"  🌐 Navigating to URL: {url}")
+            navigateToURL(url)
             
         else:
             print(f"  ⚠️ Unknown function: {func_name}")
@@ -148,16 +185,37 @@ def close_session():
 def main():
     """Start the interactive session"""
     print("="*60)
-    print("🤖 FunctionGemma Interactive Session")
+    print("🤖 FunctionGemma Interactive Shell")
     print("="*60)
-    print("Available commands:")
-    print("  navigateToURL('links.html')   - Open a page")
-    print("  clickLink('click google')     - Interact via AI")
-    print("  exit()                        - Quit")
+    print("Type your commands in natural language.")
+    print("Examples:")
+    print("  > Go to links.html")
+    print("  > Click the Google link")
+    print("  > Type 'hello' in search-box")
+    print("Type 'exit' or 'quit' to end session.")
     print("="*60)
     
-    # Start the Python REPL
-    code.interact(local=globals())
+    # Init driver early
+    init_driver()
+    
+    while True:
+        try:
+            user_input = input("\n> ").strip()
+            
+            if not user_input:
+                continue
+                
+            if user_input.lower() in ["exit", "quit"]:
+                close_session()
+                break
+                
+            process_command(user_input)
+            
+        except KeyboardInterrupt:
+            print("\nInterrupted. Type 'exit' to quit.")
+        except EOFError:
+            close_session()
+            break
 
 if __name__ == "__main__":
     main()
