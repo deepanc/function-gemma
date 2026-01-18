@@ -118,49 +118,66 @@ def process_command(natural_language_command):
     except Exception as e:
         print(f"❌ Error: {e}")
 
+def find_element_simple(driver, args):
+    """Helper to find element via ID or Name"""
+    eid = args.get("id")
+    ename = args.get("name")
+
+    if eid:
+         try: return driver.find_element(By.ID, eid)
+         except: pass
+         # Fallback ID as name
+         try: return driver.find_element(By.NAME, eid)
+         except: pass
+    
+    if ename:
+        try: return driver.find_element(By.NAME, ename)
+        except: pass
+        
+    raise Exception(f"Element not found with args: {args}")
+
 def execute_local_action(func_name, args):
     """Execute a single Selenium action locally"""
     global driver
     
     try:
         if func_name == "click_element":
-            element_id = args.get("id")
-            print(f"  🖱️ Clicking element with ID: {element_id}")
-            
-            element = driver.find_element(By.ID, element_id)
-            element.click()
-            
-            # Special handling for close_button if we want to mimic the JS behavior behavior
-            if element_id == "close_button":
-                print("  🛑 Close button clicked.")
-
-        elif func_name == "send_keys":
-            element_id = args.get("id")
-            text = args.get("text", "")
-            print(f"  ⌨️ Typing '{text}' into ID: {element_id}")
+            print(f"  🖱️ Clicking element: {args}")
             
             try:
-                element = driver.find_element(By.ID, element_id)
-            except Exception:
-                print(f"  ⚠️ ID '{element_id}' not found. Trying NAME...", end=" ")
-                try:
-                    element = driver.find_element(By.NAME, element_id)
-                    print("✅ Found by NAME.")
-                except Exception:
-                    print("❌ Not found.")
-                    raise
+                element = find_element_simple(driver, args)
+            except Exception as e:
+                print(f"  ❌ Element not found: {e}")
+                return
+
+            element.click()
+            
+            # Special handling for close_button
+            if args.get("id") == "close_button":
+                print("  🛑 Close button clicked. Closing session...")
+                driver.quit()
+                driver = None
+                return
+
+        elif func_name == "send_keys":
+            text = args.get("text", "")
+            print(f"  ⌨️ Typing '{text}' into element: {args}")
+            
+            try:
+                element = find_element_simple(driver, args)
+            except Exception as e:
+                print(f"  ❌ Element not found: {e}")
+                return
 
             element.clear()
             element.send_keys(text)
 
         elif func_name == "send_keys_by_name":
+            # Legacy support
             element_name = args.get("name")
             text = args.get("text", "")
             print(f"  ⌨️ Typing '{text}' into NAME: {element_name}")
-            
-            element = driver.find_element(By.NAME, element_name)
-            element.clear()
-            element.send_keys(text)
+            driver.find_element(By.NAME, element_name).send_keys(text)
             
         elif func_name == "navigate_to_url":
             url = args.get("url")

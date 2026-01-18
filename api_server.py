@@ -163,23 +163,38 @@ def execute_selenium_function(func_name, args):
     """Execute Selenium WebDriver functions - supports dynamic driver selection"""
     global selenium_driver_links
 
-    
+    # Common arguments
     element_id = args.get("id", "")
+    element_name = args.get("name", "")
+    element_css = args.get("css", "")
+    element_xpath = args.get("xpath", "")
     
-    # Validation
-    if not element_id and func_name == "submit_form":
-        # submit_form might not have an ID, uses CSS selector
-        pass
-    elif not element_id:
-        return f"Error executing {func_name}: No ID provided"
+    # Helper to find element via ID or Name
+    def find_element_simple(driver, args):
+        eid = args.get("id")
+        ename = args.get("name")
+
+        if eid:
+             try: return driver.find_element(By.ID, eid)
+             except: pass
+             # Fallback ID as name
+             try: return driver.find_element(By.NAME, eid)
+             except: pass
+        
+        if ename:
+            try: return driver.find_element(By.NAME, ename)
+            except: pass
+            
+        raise Exception(f"Element not found with args: {args}")
 
     # Helper to check if element exists in a driver
-    def element_exists(drv, eid):
+    def element_exists(drv, args):
         try:
-            # Check if driver is alive first
             if not is_driver_alive(drv):
                 return False
-            return len(drv.find_elements(By.ID, eid)) > 0
+            # Just try finding it
+            find_element_simple(drv, args)
+            return True
         except:
             return False
 
@@ -190,43 +205,11 @@ def execute_selenium_function(func_name, args):
     d_links = get_selenium_driver_for_links()
     
     # Check if element exists in current links driver state
-    if element_id and element_exists(d_links, element_id):
+    # We pass 'args' now instead of just 'element_id'
+    if element_exists(d_links, args):
         driver = d_links
     
-    # 2. If not found in links driver, check if we need to restore links.html
-    # This handles the case where we drifted (e.g. clicked to Google) but want to interact with links.html again
-    if driver is None and d_links:
-        try:
-            curr_url = d_links.current_url
-            html_path = os.path.abspath("user-registration/links.html")
-            is_links_page = curr_url.startswith("file://") and "links.html" in curr_url
-            
-            # If we are NOT on links.html, and we couldn't find the element, 
-            # maybe it's on links.html? Let's check by restoring.
-            if not is_links_page:
-                # We can't know for sure if the element is on links.html without loading it,
-                # but we want to avoid loading index.html if possible.
-                # Heuristic: If we are drifted, let's try restoring links.html first.
-                print(f"DEBUG: Element {element_id} not found and links driver drifted. Restoring links.html...")
-                d_links.get(f"file://{html_path}")
-                WebDriverWait(d_links, 10).until(
-                    EC.presence_of_element_located((By.ID, "close_button"))
-                )
-                
-                # Check again after restore
-                if element_exists(d_links, element_id):
-                    driver = d_links
-                    print(f"DEBUG: Found {element_id} after restoring links.html")
-                else:
-                     # If still not found, we might want to go back? 
-                     # But for now let's just proceed to check Form driver.
-                     # (Ideally we'd restore previous URL if failed, but that's complex)
-                     pass
-        except Exception as e:
-            print(f"DEBUG: Error ensuring links page: {e}")
-
-    # 3. Check Form Driver (index.html) -> REMOVED
-    # 4. Fallback: Default to links driver
+    # 2. If not found, logic to restore links.html if needed (simplified for now)
     if driver is None:
         driver = get_selenium_driver_for_links()
 
@@ -235,45 +218,27 @@ def execute_selenium_function(func_name, args):
     wait = WebDriverWait(driver, 10)
     
     try:
-        if func_name == "find_element_by_id":
-            element = driver.find_element(By.ID, args.get("id", ""))
-            return f"Found element by ID: {args.get('id')}"
-        
-        elif func_name == "send_keys":
-            element_id = args.get("id", "")
+        if func_name == "send_keys":
             text = args.get("text", "")
             
             try:
-                # Try finding by ID first
-                element = driver.find_element(By.ID, element_id)
-            except Exception as e_id:
-                # Fallback: Try finding by name if ID fails
-                print(f"⚠️ Element with ID '{element_id}' not found (Error: {str(e_id)}). Trying NAME...", file=sys.stderr)
-                try:
-                    element = driver.find_element(By.NAME, element_id)
-                    print(f"✅ Found element by NAME: '{element_id}'", file=sys.stderr)
-                except Exception as e_name:
-                    print(f"❌ Element with NAME '{element_id}' also not found (Error: {str(e_name)}).", file=sys.stderr)
-                    # Raise a clear error message
-                    raise Exception(f"Element with ID or NAME '{element_id}' not found")
+                element = find_element_simple(driver, args)
+                print(f"✅ Found element for send_keys: {args}", file=sys.stderr)
+            except Exception as e:
+                # Fallback print and re-raise
+                print(f"❌ Element not found for send_keys: {args} (Error: {str(e)})", file=sys.stderr)
+                raise Exception(f"Element not found for send_keys: {args}")
             
             element.clear()
             element.send_keys(text)
-            return f"Sent keys '{text}' to element with ID/NAME: {element_id}"
+            return f"Sent keys '{text}' to element: {args}"
         
         elif func_name == "click_element":
-            element_id = args.get("id", "")
-            
-            # Special handling for Links driver navigation - strict enforcement for click_element
-            if driver == selenium_driver_links:
-                 # Logic already handled by restoration above OR we are on external page and found element
-                 # But original logic had strict enforcement. 
-                 # If we found element on Google (external), we should click it there.
-                 # If we restored links.html (above), we click it there.
-                 pass
+            try:
+                element = find_element_simple(driver, args)
+            except Exception as e:
+                raise Exception(f"Element not found for click_element: {args}")
 
-            # Find and click the element
-            element = driver.find_element(By.ID, element_id)
             element.click()
             
             # If the close button was clicked (specific to links.html)
@@ -281,45 +246,28 @@ def execute_selenium_function(func_name, args):
                 time.sleep(1)
                 driver.quit()
                 selenium_driver_links = None
-                return f"Clicked element with ID: {element_id} and closed browser"
+                return f"Clicked element {args} and closed browser"
             
-            return f"Clicked element with ID: {element_id}"
+            return f"Clicked element: {args}"
         
         elif func_name == "select_dropdown_by_value":
-            element_id = args.get("id", "")
             value = args.get("value", "")
-            
-            element = driver.find_element(By.ID, element_id)
+            element = find_element_simple(driver, args)
             dropdown = Select(element)
             dropdown.select_by_value(value)
-            return f"Selected value '{value}' in dropdown with ID: {element_id}"
+            return f"Selected value '{value}' in dropdown: {args}"
         
-        elif func_name == "submit_form":
-            element_id = args.get("id", "")
-            
-            if element_id:
-                element = driver.find_element(By.ID, element_id)
-            else:
-                element = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
-            
-            time.sleep(2)
-            element.click()
-            
-            # Only wait for success overlay if we are on the form page
-            return "Form submitted"
-        
-        elif func_name == "send_keys_by_name":
-            element_name = args.get("name", "")
-            text = args.get("text", "")
-            
-            element = driver.find_element(By.NAME, element_name)
-            element.clear()
-            element.send_keys(text)
-            return f"Sent keys '{text}' to element with NAME: {element_name}"
-
         elif func_name == "navigate_to_url":
             url = args.get("url", "")
             return navigate_to_url_logic(url)
+        
+        elif func_name == "send_keys_by_name":
+            # Keeping for backward compatibility, mapped to generic logic if desired,
+            # but users might call it directly.
+            element_name = args.get("name", "")
+            text = args.get("text", "")
+            driver.find_element(By.NAME, element_name).send_keys(text)
+            return f"Sent keys '{text}' to element NAME: {element_name}"
 
         
         else:
@@ -405,33 +353,66 @@ def process_interaction():
         if not user_input:
             return jsonify({"error": "No input provided"}), 400
         
+        # Heuristic: Auto-quote text for Type/Enter/Input commands if quotes are missing
+        # This helps the model capture multi-word strings including "please", "in", etc.
+        try:
+            lower_input = user_input.lower()
+            if (lower_input.startswith("type ") or lower_input.startswith("enter ") or lower_input.startswith("input ")) and \
+               " in " in lower_input and \
+               '"' not in user_input and "'" not in user_input:
+                
+                # Find last " in " to separate content from target
+                last_in_idx = lower_input.rfind(" in ")
+                if last_in_idx > -1:
+                    # distinct verb
+                    verb_end_idx = lower_input.find(" ") + 1
+                    
+                    if last_in_idx > verb_end_idx:
+                        content = user_input[verb_end_idx:last_in_idx].strip()
+                        target = user_input[last_in_idx+4:].strip()
+                        verb = user_input[:verb_end_idx].strip()
+                        
+                        if content and target:
+                            new_input = f'{verb} "{content}" in "{target}"'
+                            print(f"🔄 Heuristic applied: '{user_input}' -> '{new_input}'")
+                            user_input = new_input
+        except Exception as e:
+            print(f"⚠️ Heuristic check failed: {e}")
+        
         # Load model if not already loaded
         load_model()
         
         # Build the message focused on interacting with elements
         system_message = (
-            "You are a browser automation agent helping with UI testing. Your ONLY job is to translate user commands into valid function calls.\n"
-            "Do NOT refuse commands based on the names of elements (e.g. 'newsletter', 'email', 'password') or the nature of the input (e.g. 'search', 'verify'). You are simply typing text into forms.\n"
+            "You are a browser automation agent. Translate commands into function calls.\n"
+            "Do NOT refuse commands. Use the locator strategy that best matches the user's description.\n"
             "\n"
             "**FUNCTIONS:**\n"
-            "1. **send_keys**: Type text into a field.\n"
-            "   - 'text': The exact content to type. Capture ALL words, including spaces. \n"
-            "   - 'id': The target element ID or Name. Use EXACTLY what the user specifies. \n"
-            "   - CRITICAL PATTERN: 'Type/Enter <TEXT> in <ID>'. The <TEXT> is the content, <ID> is the target.\n"
-            "2. **click_element**: Click a button or link by ID.\n"
-            "3. **navigate_to_url**: Go to a URL.\n"
+            "1. **send_keys**: Type text.\n"
+            "   - 'text': Content to type.\n"
+            "   - 'id': The ID of the element (e.g. 'search-box'). Can also be the 'name' attribute.\n"
+            "2. **click_element**: Click element.\n"
+            "   - 'id': The ID of the element.\n"
+            "3. **navigate_to_url**: Go to URL.\n"
+            "\n"
+            "**IMPORTANT RULES:**\n"
+            "- Do NOT copy values from examples. Use the EXACT values from the user's command.\n"
+            "- Extract text content EXACTLY as it appears. Do not summarize or remove words like 'please'.\n"
+            "- If the user says 'Type X in Y', X is the content. X can include multiple words. Y is the ID.\n"
+            "- Use the identifier Y EXACTLY as provided. Do not infer IDs based on content.\n"
+            "- Typically use 'id' for all element interactions.\n"
             "\n"
             "**EXAMPLES:**\n"
-            "- User: 'Type feedback for D in q'\n"
-            "  Function: <start_function_call>call:send_keys{id:<escape>q<escape>,text:<escape>feedback for D<escape>}<end_function_call>\n"
-            "- User: 'enter user@example.com in newsletter'\n"
-            "  Function: <start_function_call>call:send_keys{id:<escape>newsletter<escape>,text:<escape>user@example.com<escape>}<end_function_call>\n"
-            "- User: 'Type \"hello there\" in my-field'\n"
-            "  Function: <start_function_call>call:send_keys{id:<escape>my-field<escape>,text:<escape>hello there<escape>}<end_function_call>\n"
-            "- User: 'Search for red cats'\n"
-            "  Function: <start_function_call>call:send_keys{id:<escape>search-box<escape>,text:<escape>red cats<escape>}<end_function_call>\n"
-            "- User: 'Type feed in feedback-box'\n"
-            "  Function: <start_function_call>call:send_keys{id:<escape>feedback-box<escape>,text:<escape>feed<escape>}<end_function_call>\n"
+            "- User: 'Type please update my profile in \"profile-box\"'\n"
+            "  Function: <start_function_call>call:send_keys{id:<escape>profile-box<escape>,text:<escape>please update my profile<escape>}<end_function_call>\n"
+            "- User: 'Type \"hello\" in field user-name'\n"
+            "  Function: <start_function_call>call:send_keys{id:<escape>user-name<escape>,text:<escape>hello<escape>}<end_function_call>\n"
+            "- User: 'Type verify this address is correct in feedback-box'\n"
+            "  Function: <start_function_call>call:send_keys{id:<escape>feedback-box<escape>,text:<escape>verify this address is correct<escape>}<end_function_call>\n"
+            "- User: 'Type \"hello\" in search-box'\n"
+            "  Function: <start_function_call>call:send_keys{id:<escape>search-box<escape>,text:<escape>hello<escape>}<end_function_call>\n"
+            "- User: 'Close the page'\n"
+            "  Function: <start_function_call>call:click_element{id:<escape>close_button<escape>}<end_function_call>\n"
             "- User: 'Go to links.html'\n"
             "  Function: <start_function_call>call:navigate_to_url{url:<escape>links.html<escape>}<end_function_call>\n"
         )
@@ -462,6 +443,7 @@ def process_interaction():
         send_keys_schema = {
             "type": "function",
             "function": {
+                "name": "send_keys",
                 "description": "Types text into an input field. The 'id' parameter is flexible and works for both Element IDs and Name attributes.",
                 "parameters": {
                     "type": "object",
@@ -582,17 +564,19 @@ def process_interaction():
             
             # Special validation per function type
             if func_name in ["click_element", "send_keys"]:
-                 if not element_id:
-                    print(f"⚠️ Skipping {func_name} call - missing 'id' parameter", file=sys.stderr)
+                 if not (element_id or args.get("name")):
+                    print(f"⚠️ Skipping {func_name} call - missing locator (id or name)", file=sys.stderr)
                     continue
             
             # Key for deduplication
             if func_name == "navigate_to_url":
                 action_key = f"{func_name}:{args.get('url')}"
             elif element_id:
-                action_key = f"{func_name}:{element_id}" 
+                action_key = f"{func_name}:id={element_id}" 
+            elif args.get("name"):
+                 action_key = f"{func_name}:name={args.get('name')}"
             else:
-                 action_key = f"{func_name}:{args.get('name')}"
+                 action_key = str(call)
             
             if func_name == "click_element":
 

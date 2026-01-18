@@ -182,6 +182,18 @@
     console.log(
       "Example: clickLink('Click the Google link') or clickLink('Click GitHub')"
     );
+
+    // Add event listener for close button
+    document.getElementById('close_button').addEventListener('click', async () => {
+      const PYTHON_API_URL = "http://127.0.0.1:5000";
+      try {
+        console.log("🛑 Closing browser via API...");
+        await fetch(`${PYTHON_API_URL}/close_browser`, { method: "POST" });
+        window.close(); // Attempt to close tab as well
+      } catch (error) {
+        console.error("❌ Error closing browser:", error);
+      }
+    });
   </script>
 </body>
 
