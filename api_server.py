@@ -150,10 +150,16 @@ def navigate_to_url_logic(url_or_filename):
             os.path.join(base_path, url_or_filename)
         ]
         
+        found_local = False
         for p in possible_paths:
             if os.path.exists(p):
                 target_url = f"file://{p}"
+                found_local = True
                 break
+        
+        # If not found locally, assume it's a web URL and default to https
+        if not found_local:
+            target_url = f"https://{url_or_filename}"
     
     print(f"🌐 Navigating to: {target_url}")
     driver.get(target_url)
