@@ -432,6 +432,8 @@ def process_interaction():
             "**EXAMPLES:**\n"
             "- User: 'Select Dark Mode in theme-select'\n"
             "  Function: <start_function_call>call:select_option{id:<escape>theme-select<escape>,text:<escape>Dark Mode<escape>}<end_function_call>\n"
+            "- User: 'Choose Pro Tier plan'\n"
+            "  Function: <start_function_call>call:click_element{id:<escape>plan-pro<escape>}<end_function_call>\n"
             "- User: 'Type please update my profile in \"profile-box\"'\n"
             "  Function: <start_function_call>call:send_keys{id:<escape>profile-box<escape>,text:<escape>please update my profile<escape>}<end_function_call>\n"
             "- User: 'Type \"hello\" in field user-name'\n"
