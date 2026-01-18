@@ -185,6 +185,19 @@ def execute_local_action(func_name, args):
             print(f"  ⌨️ Typing '{text}' into NAME: {element_name}")
             driver.find_element(By.NAME, element_name).send_keys(text)
             
+        elif func_name == "select_option":
+            text = args.get("text", "")
+            print(f"  🔽 Selecting option '{text}' in dropdown: {args}")
+            try:
+                element = find_element_simple(driver, args)
+                dropdown = Select(element)
+                try:
+                    dropdown.select_by_visible_text(text)
+                except:
+                    dropdown.select_by_value(text)
+            except Exception as e:
+                 print(f"  ❌ Selection failed: {e}")
+
         elif func_name == "navigate_to_url":
             url = args.get("url")
             print(f"  🌐 Navigating to URL: {url}")

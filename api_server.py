@@ -256,6 +256,18 @@ def execute_selenium_function(func_name, args):
             
             return f"Clicked element: {args}"
         
+        elif func_name == "select_option":
+            value = args.get("text", "")
+            element = find_element_simple(driver, args)
+            dropdown = Select(element)
+            try:
+                dropdown.select_by_visible_text(value)
+                return f"Selected option '{value}' in dropdown: {args}"
+            except Exception:
+                # Fallback to value if text fails
+                dropdown.select_by_value(value)
+                return f"Selected value '{value}' in dropdown: {args}"
+
         elif func_name == "select_dropdown_by_value":
             value = args.get("value", "")
             element = find_element_simple(driver, args)
@@ -364,18 +376,24 @@ def process_interaction():
         try:
             lower_input = user_input.lower()
             if (lower_input.startswith("type ") or lower_input.startswith("enter ") or lower_input.startswith("input ")) and \
-               " in " in lower_input and \
+               (" in " in lower_input or " from " in lower_input) and \
                '"' not in user_input and "'" not in user_input:
                 
-                # Find last " in " to separate content from target
-                last_in_idx = lower_input.rfind(" in ")
-                if last_in_idx > -1:
+                # Find last " in " or " from " to separate content from target
+                last_sep_idx = lower_input.rfind(" in ")
+                if last_sep_idx == -1: last_sep_idx = lower_input.rfind(" from ")
+                
+                if last_sep_idx > -1:
                     # distinct verb
                     verb_end_idx = lower_input.find(" ") + 1
                     
-                    if last_in_idx > verb_end_idx:
-                        content = user_input[verb_end_idx:last_in_idx].strip()
-                        target = user_input[last_in_idx+4:].strip()
+                    if last_sep_idx > verb_end_idx:
+                        content = user_input[verb_end_idx:last_sep_idx].strip()
+                        target = user_input[last_sep_idx+len(" in "):].strip() # approximate
+                        # if using " from ", adjust len
+                        if " from " in lower_input[last_sep_idx:]:
+                             target = user_input[last_sep_idx+len(" from "):].strip()
+                        
                         verb = user_input[:verb_end_idx].strip()
                         
                         if content and target:
@@ -399,16 +417,21 @@ def process_interaction():
             "   - 'id': The ID of the element (e.g. 'search-box'). Can also be the 'name' attribute.\n"
             "2. **click_element**: Click element.\n"
             "   - 'id': The ID of the element.\n"
-            "3. **navigate_to_url**: Go to URL.\n"
+            "3. **select_option**: Select from dropdown.\n"
+            "   - 'id': The ID of the dropdown.\n"
+            "   - 'text': The visible text of the option to select.\n"
+            "4. **navigate_to_url**: Go to URL.\n"
             "\n"
             "**IMPORTANT RULES:**\n"
             "- Do NOT copy values from examples. Use the EXACT values from the user's command.\n"
             "- Extract text content EXACTLY as it appears. Do not summarize or remove words like 'please'.\n"
-            "- If the user says 'Type X in Y', X is the content. X can include multiple words. Y is the ID.\n"
+            "- If the user says 'Type X in Y' or 'Select X in Y', X is the content. X can include multiple words. Y is the ID.\n"
             "- Use the identifier Y EXACTLY as provided. Do not infer IDs based on content.\n"
             "- Typically use 'id' for all element interactions.\n"
             "\n"
             "**EXAMPLES:**\n"
+            "- User: 'Select Dark Mode in theme-select'\n"
+            "  Function: <start_function_call>call:select_option{id:<escape>theme-select<escape>,text:<escape>Dark Mode<escape>}<end_function_call>\n"
             "- User: 'Type please update my profile in \"profile-box\"'\n"
             "  Function: <start_function_call>call:send_keys{id:<escape>profile-box<escape>,text:<escape>please update my profile<escape>}<end_function_call>\n"
             "- User: 'Type \"hello\" in field user-name'\n"
@@ -469,6 +492,29 @@ def process_interaction():
             }
         }
 
+        # Create select_option function schema
+        select_option_schema = {
+            "type": "function",
+            "function": {
+                "name": "select_option",
+                "description": "Selects an option from a dropdown menu by its visible text.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "The ID of the dropdown element."
+                        },
+                        "text": {
+                            "type": "string",
+                            "description": "The visible text of the option to select."
+                        }
+                    },
+                    "required": ["id", "text"]
+                }
+            }
+        }
+
         # Create navigate_to_url function schema
         navigate_to_url_schema = {
             "type": "function",
@@ -490,7 +536,7 @@ def process_interaction():
         
         # Use schemas if no custom schemas provided
         if not function_schemas:
-            function_schemas = [click_element_schema, send_keys_schema, navigate_to_url_schema]
+            function_schemas = [click_element_schema, send_keys_schema, select_option_schema, navigate_to_url_schema]
         
         message = [
             {
@@ -532,7 +578,9 @@ def process_interaction():
         VALID_FUNCTION_NAMES = {
             "click_element",
             "send_keys",
+            "send_keys",
             "send_keys_by_name",
+            "select_option",
             "navigate_to_url"
         }
         
@@ -569,7 +617,7 @@ def process_interaction():
             element_id = args.get("id")
             
             # Special validation per function type
-            if func_name in ["click_element", "send_keys"]:
+            if func_name in ["click_element", "send_keys", "select_option"]:
                  if not (element_id or args.get("name")):
                     print(f"⚠️ Skipping {func_name} call - missing locator (id or name)", file=sys.stderr)
                     continue
@@ -608,6 +656,15 @@ def process_interaction():
                         seen_actions.add(action_key)
                 else:
                      print(f"⚠️ Skipping send_keys_by_name call - missing parameters")
+
+            elif func_name == "select_option":
+                text = args.get("text")
+                if text:
+                    if action_key not in seen_actions:
+                        filtered_calls.append(call)
+                        seen_actions.add(action_key)
+                else:
+                    print(f"⚠️ Skipping select_option call - missing 'text' parameter")
 
             elif func_name == "navigate_to_url":
                 url = args.get("url")
