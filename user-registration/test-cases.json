@@ -2,8 +2,8 @@
   "test_cases": [
     {
       "name": "Complete Registration Test",
-      "description": "Fill all fields and submit the form",
-      "natural_language": "My name is John Doe, I am 30 years old, male, I live at 123 Main Street, Bangalore, pincode 560001, submit the form"
+      "description": "Fill all fields and submit the form using Selenium functions",
+      "natural_language": "Fill the following values in index.html and submit the form. Field IDs and value to be set are given in a key value pair as follows. name: John Doe, age: 30, sex: male, address: 123 Main Street, Bangalore, pincode: 560001"
     }
   ]
 }
